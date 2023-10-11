@@ -1,5 +1,5 @@
 use schemars::schema::RootSchema;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 #[derive(Serialize)]
 pub struct RequestMessage {
@@ -51,3 +51,48 @@ pub struct Response {
     pub model: String,
     pub choices: Vec<Choice>,
 }
+
+#[derive(Debug)]
+pub struct OpenAIClientError;
+
+async fn send_request(
+    body: ChatCompletionBody,
+) -> Result<Response, OpenAIClientError> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .header("Authorization", "Bearer ".to_string() + &std::env::var("OPENAI_API_KEY").unwrap())
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            println!("Error: {:?}", e);
+            OpenAIClientError
+        })?;
+    if !response.status().is_success() {
+        println!("Error: {:?}", response);
+        return Err(OpenAIClientError);
+    }
+    let response = response.json::<Response>().await.map_err(|e| {
+        println!("Error: {:?}", e);
+        OpenAIClientError
+    })?;
+    Ok(response)
+}
+
+pub async fn recieve_function_call_args<T: DeserializeOwned>(
+    body: ChatCompletionBody,
+) -> Result<Option<T>, OpenAIClientError> {
+    let response = send_request(body).await?;
+    let function_call = response.choices[0].message.function_call.clone();
+    if let Some(function_call) = function_call {
+        let args = serde_json::from_str(&function_call.arguments).map_err(|e| {
+            println!("Error: {:?}", e);
+            OpenAIClientError
+        })?;
+        Ok(Some(args))
+    } else {
+        Ok(None)
+    }
+}
+

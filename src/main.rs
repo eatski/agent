@@ -1,9 +1,11 @@
 use dialoguer::Confirm;
-use openai::{ChatCompletionBody, RequestMessage, Function, Response};
+use openai::{ChatCompletionBody, RequestMessage, Function};
 use rand::seq::SliceRandom;
 use serde::Deserialize;
 use tokio::task;
 use schemars::{schema_for, JsonSchema};
+
+use crate::openai::recieve_function_call_args;
 
 mod openai;
 
@@ -71,14 +73,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         true
                     }
                 })
-                .map(|agent| task::spawn(handle_agent(agent,system_prompt.clone())))
+                .map(|agent| {
+                    let system_prompt = system_prompt.clone();
+                    task::spawn( async move {
+                        let mut messages = vec![
+                            RequestMessage {
+                                role: "system".to_string(),
+                                content: system_prompt,
+                            },
+                            RequestMessage {
+                                role: "system".to_string(),
+                                content: agent.prompt,
+                            },
+                        ];
+                        messages.append(&mut agent.events.iter().map(|event| RequestMessage {
+                            role: "user".to_string(),
+                            content: event.clone(),
+                        }).collect::<Vec<_>>());
+                        let body = ChatCompletionBody {
+                            model: "gpt-4-0613".to_string(),
+                            messages,
+                            temperature: 0.7,
+                            max_tokens: 4000,
+                            function_call: "auto".to_string(),
+                            functions: vec![
+                                Function {
+                                    name: "chat".to_string(),
+                                    description: "他プレイヤーに対して発言します。thinkingは何を考えているか、messageは発言の内容、positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。積極性が低いと発言そのものが無視される可能性があります。".to_string(),
+                                    parameters: schema_for!(FunctionArgs),
+                                }
+                            ]
+                        };
+                        (agent.name, recieve_function_call_args::<FunctionArgs>(body).await)
+                    })
+                })
                 .collect();
 
             let results: Vec<_> = futures::future::join_all(tasks).await.into_iter().filter_map(|result| {
-                let (name,response) = result.ok()?.ok()?;
-                let choice = response.choices[0].clone();
-                let arguments = choice.message.function_call.clone().map(|e| e.arguments)?;
-                let arguments = serde_json::from_str::<FunctionArgs>(&arguments).ok()?;
+                let (name,arguments) = result.ok()?;
+                let arguments = arguments.ok()??;
                 Some((name,arguments))
             })
             .collect();
@@ -98,68 +131,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break 'main;
         }
     }
-
     Ok(())
-}
-
-#[derive(Debug)]
-struct OpenAIClientError;
-async fn handle_agent(
-    agent: Agent,
-    system_prompt: String,
-) -> Result<(String, Response), OpenAIClientError> {
-    let mut messages = vec![
-        RequestMessage {
-            role: "system".to_string(),
-            content: system_prompt,
-        },
-        RequestMessage {
-            role: "system".to_string(),
-            content: agent.prompt,
-        },
-    ];
-
-    messages.extend(agent.events.iter().map(|e| RequestMessage {
-        role: "user".to_string(),
-        content: e.to_string(),
-    }));
-
-    let body = ChatCompletionBody {
-        model: "gpt-4-0613".to_string(),
-        messages,
-        temperature: 0.7,
-        max_tokens: 4000,
-        function_call: "auto".to_string(),
-        functions: vec![
-            Function {
-                name: "chat".to_string(),
-                description: "他プレイヤーに対して発言します。thinkingは何を考えているか、messageは発言の内容、positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。積極性が低いと発言そのものが無視される可能性があります。".to_string(),
-                parameters: schema_for!(FunctionArgs),
-            }
-        ]
-    };
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://api.openai.com/v1/chat/completions")
-        .json(&body)
-        .header(
-            "Authorization",
-            format!("Bearer {}", std::env::var("OPENAI_TOKEN").unwrap()),
-        )
-        .send()
-        .await.map_err(|error| {
-            println!("Error: {:?}", error);
-            OpenAIClientError
-        })?;
-    if !res.status().is_success() {
-        println!("Error: {:?}", res);
-        return Err(OpenAIClientError);
-    }
-    let response = res.text().await.map_err(|_| OpenAIClientError)?;
-
-    let response = serde_json::from_str::<Response>(&response).map_err(|error| {
-        println!("Error: {:?} {:?}", error,response);
-        OpenAIClientError
-    })?;
-    Ok((agent.name, response))
 }
