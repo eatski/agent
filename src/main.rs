@@ -28,15 +28,26 @@ impl Agent {
 pub struct FunctionArgs {
     pub message: String,
     pub positivity: usize,
+    pub thinking: String,
 }
+
+const MANIFESTS: [(&str, &str); 4] = [
+    ("山田", "./prompts/agent-a.md"),
+    ("田中", "./prompts/agent-b.md"),
+    ("鈴木", "./prompts/agent-c.md"),
+    ("佐藤", "./prompts/agent-d.md")
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut agents = vec![
-        Agent::new("A".to_string(), "./prompts/agent-a.md".to_string()),
-        Agent::new("B".to_string(), "./prompts/agent-b.md".to_string()),
-        Agent::new("C".to_string(), "./prompts/agent-c.md".to_string()),
-    ];
+
+    let mut agents = MANIFESTS
+        .iter()
+        .map(|(name, prompt)| Agent::new(name.to_string(), std::fs::read_to_string(prompt).unwrap()))
+        .collect::<Vec<_>>();
+
+    let mut latest_speaker: Option<String> = None;
+    let system_prompt = std::fs::read_to_string("./prompts/system.md")?;
 
     'main: loop {
         if Confirm::new()
@@ -46,34 +57,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             println!("プログラムを続けます．");
 
-            let system_prompt = std::fs::read_to_string("./prompts/system.md").unwrap();
+            let mut cloned_agents = agents.clone();
+            let mut rng = rand::thread_rng();
+            cloned_agents.shuffle(&mut rng);
 
             // Prepare requests in parallel for each agent
-            let tasks: Vec<_> = agents
-                .clone()
+            let tasks: Vec<_> = cloned_agents
                 .into_iter()
+                .filter(|agent| {
+                    if let Some(latest_speaker) = latest_speaker.clone() {
+                        agent.name != latest_speaker
+                    } else {
+                        true
+                    }
+                })
                 .map(|agent| task::spawn(handle_agent(agent,system_prompt.clone())))
                 .collect();
 
-            let mut results: Vec<_> = futures::future::join_all(tasks).await.into_iter().filter_map(|result| {
+            let results: Vec<_> = futures::future::join_all(tasks).await.into_iter().filter_map(|result| {
                 let (name,response) = result.ok()?.ok()?;
                 let choice = response.choices[0].clone();
                 let arguments = choice.message.function_call.clone().map(|e| e.arguments)?;
                 let arguments = serde_json::from_str::<FunctionArgs>(&arguments).ok()?;
-                let thinking = choice.message.content;
-                Some((name,arguments,thinking))
+                Some((name,arguments))
             })
             .collect();
+            let most_possible_chat = results.iter().max_by_key(|(_,args)| args.positivity);
 
-            for (name,_,content) in results.iter() {
-                println!("{}:({})", name, content);
-            }
-
-            let mut rng = rand::thread_rng();
-            results.shuffle(&mut rng);
-            let most_possible_chat = results.iter().max_by_key(|(_,args,_): &&(String, FunctionArgs, String)| args.positivity);
+            latest_speaker = most_possible_chat.clone().map(|e| e.0.clone());
 
             if let Some(most_possible_chat) = most_possible_chat {
+                println!("{}:({})", most_possible_chat.0, most_possible_chat.1.thinking);
                 println!("{}:「{}」", most_possible_chat.0, most_possible_chat.1.message);
                 for agent in agents.iter_mut() {
                     agent.events.push(format!("{}が発言しました。:「{}」", most_possible_chat.0, most_possible_chat.1.message));
@@ -94,15 +108,14 @@ async fn handle_agent(
     agent: Agent,
     system_prompt: String,
 ) -> Result<(String, Response), OpenAIClientError> {
-    let prompt = std::fs::read_to_string(&agent.prompt).unwrap();
     let mut messages = vec![
         RequestMessage {
             role: "system".to_string(),
             content: system_prompt,
         },
         RequestMessage {
-            role: "user".to_string(),
-            content: prompt,
+            role: "system".to_string(),
+            content: agent.prompt,
         },
     ];
 
@@ -114,13 +127,13 @@ async fn handle_agent(
     let body = ChatCompletionBody {
         model: "gpt-4-0613".to_string(),
         messages,
-        temperature: 0.3,
+        temperature: 0.7,
         max_tokens: 4000,
         function_call: "auto".to_string(),
         functions: vec![
             Function {
                 name: "chat".to_string(),
-                description: "他プレイヤーに対して発言します。messageは発言の内容、positivity(0~100)は発言する際の積極性（高いほど積極的）を意味します。積極性が低いと発言そのものが無視される可能性があります。".to_string(),
+                description: "他プレイヤーに対して発言します。thinkingは何を考えているか、messageは発言の内容、positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。積極性が低いと発言そのものが無視される可能性があります。".to_string(),
                 parameters: schema_for!(FunctionArgs),
             }
         ]
@@ -134,8 +147,19 @@ async fn handle_agent(
             format!("Bearer {}", std::env::var("OPENAI_TOKEN").unwrap()),
         )
         .send()
-        .await.map_err(|_| OpenAIClientError)?;
+        .await.map_err(|error| {
+            println!("Error: {:?}", error);
+            OpenAIClientError
+        })?;
+    if !res.status().is_success() {
+        println!("Error: {:?}", res);
+        return Err(OpenAIClientError);
+    }
+    let response = res.text().await.map_err(|_| OpenAIClientError)?;
 
-    let response: Response = res.json().await.map_err(|_| OpenAIClientError)?;
+    let response = serde_json::from_str::<Response>(&response).map_err(|error| {
+        println!("Error: {:?} {:?}", error,response);
+        OpenAIClientError
+    })?;
     Ok((agent.name, response))
 }

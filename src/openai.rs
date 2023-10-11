@@ -33,7 +33,7 @@ pub struct FunctionCall {
 #[derive(Deserialize, Debug,Clone)]
 pub struct MessageResponse {
     pub role: String,
-    pub content: String,
+    pub content: Option<String>,
     pub function_call: Option<FunctionCall>,
 }
 
@@ -41,14 +41,6 @@ pub struct MessageResponse {
 pub struct Choice {
     pub index: i32,
     pub message: MessageResponse,
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Deserialize, Debug,Clone)]
-pub struct Usage {
-    pub prompt_tokens: i32,
-    pub completion_tokens: i32,
-    pub total_tokens: i32,
 }
 
 #[derive(Deserialize, Debug,Clone)]
@@ -58,5 +50,4 @@ pub struct Response {
     pub created: i64,
     pub model: String,
     pub choices: Vec<Choice>,
-    pub usage: Usage,
 }
