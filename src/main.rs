@@ -1,11 +1,15 @@
+use std::collections::HashMap;
+
 use dialoguer::Confirm;
 use model::Agent;
 use rand::seq::SliceRandom;
 use tokio::task;
+use thinking::thinking;
 
 mod openai;
 mod chat;
 mod model;
+mod thinking;
 
 const MANIFESTS: [(&str, &str); 4] = [
     ("山田", "./prompts/agent-a.md"),
@@ -50,28 +54,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|agent| {
                     let system_prompt = system_prompt.clone();
                     task::spawn( async move {
-                        (agent.name.clone(), chat::chat(&agent, system_prompt).await)
+                        (agent.name.clone(), thinking(
+                            &agent, 
+                            system_prompt.as_str()
+                        ).await)
                     })
                 })
                 .collect();
 
-            let results: Vec<_> = futures::future::join_all(tasks).await.into_iter().filter_map(|result| {
+            let thinkings: HashMap<_,_> = futures::future::join_all(tasks).await.into_iter().filter_map(|result| {
                 let (name,arguments) = result.ok()?;
                 let arguments = arguments.ok()??;
                 Some((name,arguments))
             })
             .collect();
-            let most_possible_chat = results.iter().max_by_key(|(_,args)| args.positivity);
-
-            latest_speaker = most_possible_chat.clone().map(|e| e.0.clone());
-
-            if let Some(most_possible_chat) = most_possible_chat {
-                println!("{}:({})", most_possible_chat.0, most_possible_chat.1.thinking);
-                println!("{}:「{}」", most_possible_chat.0, most_possible_chat.1.message);
-                for agent in agents.iter_mut() {
-                    agent.events.push(format!("{}が発言しました。:「{}」", most_possible_chat.0, most_possible_chat.1.message));
+            for agent in agents.iter_mut() {
+                if let Some(thinking) = thinkings.get(&agent.name) {
+                    agent.events.push(format!("考え中:（{}）", thinking.thinking));
+                    println!("{}:({})", agent.name, thinking.thinking)
                 }
             }
+            async {
+                let most_possible = thinkings.iter().max_by_key(|(_,args)| args.positivity).map(|e| e.0.clone())?;
+                let result = chat::chat(&agents.iter().find(|agent| agent.name == most_possible)?.clone(), &system_prompt).await.ok()??;
+                latest_speaker = Some(most_possible.clone());
+                println!("{}:「{}」", most_possible.clone(), result.message);
+                for agent in agents.iter_mut() {
+                    agent.events.push(format!("{}が発言しました。:「{}」", most_possible.clone(), result.message));
+                }
+                Some(())
+            }.await;
         } else {
             println!("プログラムを終了します．");
             break 'main;

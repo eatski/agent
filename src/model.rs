@@ -5,7 +5,6 @@ pub struct Agent {
     pub events: Vec<String>,
 }
 
-
 impl Agent {
     pub fn new(name: String, prompt: String) -> Self {
         Self { 
