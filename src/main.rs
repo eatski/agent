@@ -1,37 +1,11 @@
 use dialoguer::Confirm;
-use openai::{ChatCompletionBody, RequestMessage, Function};
+use model::Agent;
 use rand::seq::SliceRandom;
-use serde::Deserialize;
 use tokio::task;
-use schemars::{schema_for, JsonSchema};
-
-use crate::openai::recieve_function_call_args;
 
 mod openai;
-
-#[derive(Debug,Clone)]
-struct Agent {
-    name: String,
-    prompt: String,
-    events: Vec<String>,
-}
-
-impl Agent {
-    fn new(name: String, prompt: String) -> Self {
-        Self { 
-            name, 
-            prompt,
-            events: Vec::new(),
-        }
-    }
-}
-
-#[derive(JsonSchema,Deserialize, Debug,Clone)]
-pub struct FunctionArgs {
-    pub message: String,
-    pub positivity: usize,
-    pub thinking: String,
-}
+mod chat;
+mod model;
 
 const MANIFESTS: [(&str, &str); 4] = [
     ("山田", "./prompts/agent-a.md"),
@@ -76,35 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|agent| {
                     let system_prompt = system_prompt.clone();
                     task::spawn( async move {
-                        let mut messages = vec![
-                            RequestMessage {
-                                role: "system".to_string(),
-                                content: system_prompt,
-                            },
-                            RequestMessage {
-                                role: "system".to_string(),
-                                content: agent.prompt,
-                            },
-                        ];
-                        messages.append(&mut agent.events.iter().map(|event| RequestMessage {
-                            role: "user".to_string(),
-                            content: event.clone(),
-                        }).collect::<Vec<_>>());
-                        let body = ChatCompletionBody {
-                            model: "gpt-4-0613".to_string(),
-                            messages,
-                            temperature: 0.7,
-                            max_tokens: 4000,
-                            function_call: "auto".to_string(),
-                            functions: vec![
-                                Function {
-                                    name: "chat".to_string(),
-                                    description: "他プレイヤーに対して発言します。thinkingは何を考えているか、messageは発言の内容、positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。積極性が低いと発言そのものが無視される可能性があります。".to_string(),
-                                    parameters: schema_for!(FunctionArgs),
-                                }
-                            ]
-                        };
-                        (agent.name, recieve_function_call_args::<FunctionArgs>(body).await)
+                        (agent.name.clone(), chat::chat(&agent, system_prompt).await)
                     })
                 })
                 .collect();
