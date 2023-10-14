@@ -36,7 +36,7 @@ pub async fn thinking(
         functions: vec![
             Function {
                 name: "thinking".to_string(),
-                description: "thinkingは何を考えているか、positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。positivityは自分に対して質問等が来た場合は最大にしてください。".to_string(),
+                description: "thinkingは何を考えているかを意味します。positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。positivityは自分に対して質問等が来た場合は最大に、誰かの発言を待ちたい場合は最小にしてください。".to_string(),
                 parameters: schema_for!(FunctionArgs),
             }
         ]
