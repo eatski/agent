@@ -20,7 +20,7 @@ pub struct FunctionArgs {
         example = "positivity_examples"
     )]
     pub positivity: usize,
-    #[schemars(description = "What you think.Your perceived situation and how the conversation will unfold.")]
+    #[schemars(description = "What you think in 日本語. Your perceived situation and how the conversation will unfold.")]
     pub thinking: String,
 }
 

@@ -5,6 +5,7 @@ use crate::{model::Agent, openai::{RequestMessage, ChatCompletionBody, Function,
 
 #[derive(JsonSchema,Deserialize, Debug,Clone)]
 pub struct FunctionArgs {
+    #[schemars(description = "What you want to say in 日本語.")]
     pub message: String,
 }
 
