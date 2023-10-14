@@ -32,7 +32,7 @@ pub async fn chat(agent: &Agent, system_prompt: &str) -> Result<std::option::Opt
         functions: vec![
             Function {
                 name: "chat".to_string(),
-                description: "他プレイヤーに対して発言します。".to_string(),
+                description: "Speaks out against other players.".to_string(),
                 parameters: schema_for!(FunctionArgs),
             }
         ]

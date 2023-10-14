@@ -1,11 +1,26 @@
 use schemars::{JsonSchema, schema_for};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{model::Agent, openai::{RequestMessage, ChatCompletionBody, Function, recieve_function_call_args, OpenAIClientError}};
 
-#[derive(JsonSchema,Deserialize, Debug,Clone)]
+fn positivity_examples() -> Vec<String> {
+    vec![
+        "1".to_string(),
+        "2".to_string(),
+        "3".to_string(),
+        "4".to_string(),
+        "5".to_string(),
+    ]
+}
+
+#[derive(JsonSchema,Deserialize, Debug,Clone,Serialize)]
 pub struct FunctionArgs {
+    #[schemars(
+        description = "Aggressiveness of whether to speak up or not (the higher the higher, the more aggressive). Maximize if you receive a question or reference to yourself, minimize if you want to wait for someone else to speak.",
+        example = "positivity_examples"
+    )]
     pub positivity: usize,
+    #[schemars(description = "What you think.Your perceived situation and how the conversation will unfold.")]
     pub thinking: String,
 }
 
@@ -36,7 +51,7 @@ pub async fn thinking(
         functions: vec![
             Function {
                 name: "thinking".to_string(),
-                description: "thinkingは何を考えているかを意味します。positivity(1~5)は発言する際の積極性（高いほど積極的）を意味します。positivityは自分に対して質問等が来た場合は最大に、誰かの発言を待ちたい場合は最小にしてください。".to_string(),
+                description: "Output what you are thinking.".to_string(),
                 parameters: schema_for!(FunctionArgs),
             }
         ]
