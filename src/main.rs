@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use dialoguer::Confirm;
 use model::Agent;
 use rand::seq::SliceRandom;
-use thinking::thinking;
 use tokio::task;
+use agent_act::agent_act;
 
-mod chat;
+use crate::agent_act::{ReactionFunctionArgs, ChatFunctionArgs};
+
 mod model;
 mod openai;
-mod thinking;
+mod agent_act;
 
 const MANIFESTS: [(&str, &str); 4] = [
     ("山田", "./prompts/agent-a.md"),
@@ -57,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     task::spawn(async move {
                         (
                             agent.name.clone(),
-                            thinking(&agent, system_prompt.as_str()).await,
+                            agent_act::<ReactionFunctionArgs>(&agent, system_prompt.as_str()).await,
                         )
                     })
                 })
@@ -85,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .iter()
                     .max_by_key(|(_, args)| args.positivity)
                     .map(|e| e.0.clone())?;
-                let result = chat::chat(
+                let result = agent_act::<ChatFunctionArgs>(
                     &agents
                         .iter()
                         .find(|agent| agent.name == most_possible)?

@@ -13,8 +13,13 @@ pub struct ChatCompletionBody {
     pub messages: Vec<RequestMessage>,
     pub temperature: f64,
     pub max_tokens: u32,
-    pub function_call: String,
+    pub function_call: FunctionCallName,
     pub functions: Vec<Function>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct FunctionCallName {
+    pub name: String,
 }
 
 #[derive(Serialize)]
