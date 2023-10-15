@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 use tokio::task;
 use agent_act::agent_act;
 
-use crate::agent_act::{ReactionFunctionArgs, ChatFunctionArgs};
+use crate::{agent_act::{ReactionFunctionArgs, ChatFunctionArgs}, model::Event};
 
 mod model;
 mod openai;
@@ -74,11 +74,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .collect();
             for agent in agents.iter_mut() {
-                if let Some(thinking) = thinkings.get(&agent.name) {
+                if let Some(reaction) = thinkings.get(&agent.name) {
                     agent
                         .events
-                        .push(format!("考え中:（{}）", thinking.thinking));
-                    println!("{}:({})", agent.name, thinking.thinking)
+                        .push(Event::Reaction { 
+                            thinking: reaction.thinking.clone(),
+                        });
+                    println!("{}:({})", agent.name, reaction.thinking)
                 }
             }
             async {
@@ -98,11 +100,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 latest_speaker = Some(most_possible.clone());
                 println!("{}:「{}」", most_possible.clone(), result.message);
                 for agent in agents.iter_mut() {
-                    agent.events.push(format!(
-                        "{}が発言しました。:「{}」",
-                        most_possible.clone(),
-                        result.message
-                    ));
+                    if agent.name == most_possible {
+                        agent.events.push(Event::Speak {
+                            message: result.message.clone(),
+                        });
+                    } else {
+                        agent.events.push(Event::ListenOtherSpeak {
+                            player_name: most_possible.clone(),
+                            message: result.message.clone(),
+                        });
+                    }
                 }
                 Some(())
             }

@@ -2,7 +2,7 @@ use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::{
-    model::Agent,
+    model::{Agent, Event},
     openai::{
         recieve_function_call_args, ChatCompletionBody, Function, OpenAIClientError, RequestMessage, FunctionCallName,
     },
@@ -53,7 +53,6 @@ pub struct ReactionFunctionArgs {
     pub thinking: String,
 }
 
-
 #[derive(JsonSchema, Deserialize, Debug, Clone)]
 pub struct ChatFunctionArgs {
     #[schemars(description = "What you want to say in 日本語.")]
@@ -74,22 +73,26 @@ pub async fn agent_act<F: FunctionArgs + JsonSchema + DeserializeOwned>(
     system_promot: &str,
 ) -> Result<std::option::Option<F>, OpenAIClientError> {
     let mut messages = vec![
-        RequestMessage {
-            role: "system".to_string(),
-            content: agent.prompt.clone(),
-        },
-        RequestMessage {
-            role: "system".to_string(),
+        RequestMessage::System{
             content: system_promot.to_string(),
         },
+        RequestMessage::System {
+            content: agent.prompt.clone(),
+        }
     ];
     messages.append(
         &mut agent
             .events
             .iter()
-            .map(|event| RequestMessage {
-                role: "user".to_string(),
-                content: event.clone(),
+            .map(|event| RequestMessage::User {
+                content: match event {
+                    Event::Reaction { thinking } => format!("考え中:({})",thinking.clone()),
+                    Event::Speak { message } => message.clone(),
+                    Event::ListenOtherSpeak {
+                        player_name,
+                        message,
+                    } => format!("{}: 「{}」", player_name, message),
+                }
             })
             .collect::<Vec<_>>(),
     );

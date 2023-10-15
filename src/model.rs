@@ -2,7 +2,22 @@
 pub struct Agent {
     pub name: String,
     pub prompt: String,
-    pub events: Vec<String>,
+    pub events: Vec<Event>,
+}
+
+#[derive(Debug, Clone)]
+
+pub enum Event {
+    Reaction {
+        thinking: String,
+    },
+    Speak{
+        message: String,   
+    },
+    ListenOtherSpeak{
+        player_name: String,
+        message: String,
+    },
 }
 
 impl Agent {

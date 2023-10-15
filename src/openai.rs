@@ -1,10 +1,21 @@
 use schemars::schema::RootSchema;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-#[derive(Serialize)]
-pub struct RequestMessage {
-    pub role: String,
-    pub content: String,
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "role")]
+pub enum RequestMessage{
+    #[serde(rename = "system")]
+    System {
+        content: String,
+    },
+    #[serde(rename = "user")]
+    User {
+        content: String,
+    },
+    #[serde(rename = "function")]
+    Function {
+        function_call: FunctionCall,
+    },
 }
 
 #[derive(Serialize)]
@@ -29,7 +40,7 @@ pub struct Function {
     pub parameters: RootSchema,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize,Serialize,  Debug, Clone)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
