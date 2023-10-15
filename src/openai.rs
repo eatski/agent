@@ -1,5 +1,5 @@
 use schemars::schema::RootSchema;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Serialize)]
 pub struct RequestMessage {
@@ -21,29 +21,29 @@ pub struct ChatCompletionBody {
 pub struct Function {
     pub name: String,
     pub description: String,
-    pub parameters: RootSchema
+    pub parameters: RootSchema,
 }
 
-#[derive(Deserialize, Debug,Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
 }
 
-#[derive(Deserialize, Debug,Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct MessageResponse {
     pub role: String,
     pub content: Option<String>,
     pub function_call: Option<FunctionCall>,
 }
 
-#[derive(Deserialize, Debug,Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Choice {
     pub index: i32,
     pub message: MessageResponse,
 }
 
-#[derive(Deserialize, Debug,Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Response {
     pub id: String,
     pub object: String,
@@ -55,13 +55,14 @@ pub struct Response {
 #[derive(Debug)]
 pub struct OpenAIClientError;
 
-async fn send_request(
-    body: ChatCompletionBody,
-) -> Result<Response, OpenAIClientError> {
+async fn send_request(body: ChatCompletionBody) -> Result<Response, OpenAIClientError> {
     let client = reqwest::Client::new();
     let response = client
         .post("https://api.openai.com/v1/chat/completions")
-        .header("Authorization", "Bearer ".to_string() + &std::env::var("OPENAI_API_KEY").unwrap())
+        .header(
+            "Authorization",
+            "Bearer ".to_string() + &std::env::var("OPENAI_API_KEY").unwrap(),
+        )
         .json(&body)
         .send()
         .await
@@ -95,4 +96,3 @@ pub async fn recieve_function_call_args<T: DeserializeOwned>(
         Ok(None)
     }
 }
-

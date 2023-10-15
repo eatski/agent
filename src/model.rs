@@ -1,4 +1,4 @@
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Agent {
     pub name: String,
     pub prompt: String,
@@ -7,8 +7,8 @@ pub struct Agent {
 
 impl Agent {
     pub fn new(name: String, prompt: String) -> Self {
-        Self { 
-            name, 
+        Self {
+            name,
             prompt,
             events: Vec::new(),
         }
