@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::{
     model::{Agent, Event},
     openai::{
-        recieve_function_call_args, ChatCompletionBody, Function, OpenAIClientError, RequestMessage, FunctionCallName,
+        recieve_function_call_args, ChatCompletionBody, Function, OpenAIClientError, RequestMessage, FunctionCallName, FunctionCall,
     },
 };
 
@@ -53,7 +53,7 @@ pub struct ReactionFunctionArgs {
     pub thinking: String,
 }
 
-#[derive(JsonSchema, Deserialize, Debug, Clone)]
+#[derive(JsonSchema, Deserialize, Serialize,Debug, Clone)]
 pub struct ChatFunctionArgs {
     #[schemars(description = "What you want to say in 日本語.")]
     pub message: String,
@@ -84,15 +84,37 @@ pub async fn agent_act<F: FunctionArgs + JsonSchema + DeserializeOwned>(
         &mut agent
             .events
             .iter()
-            .map(|event| RequestMessage::User {
-                content: match event {
-                    Event::Reaction { thinking } => format!("考え中:({})",thinking.clone()),
-                    Event::Speak { message } => message.clone(),
-                    Event::ListenOtherSpeak {
-                        player_name,
-                        message,
-                    } => format!("{}: 「{}」", player_name, message),
-                }
+            .map(|event| match event {
+                Event::Reaction { thinking, positivity} => RequestMessage::Function {
+                    name: ReactionFunctionArgs::get_name(),
+                    function_call: FunctionCall {
+                        name: ReactionFunctionArgs::get_name(),
+                        arguments: serde_json::to_string(&ReactionFunctionArgs {
+                            positivity: positivity.clone(),
+                            thinking: thinking.clone(),
+                        })
+                        .unwrap(),
+                    },
+                    content: serde_json::Value::Null
+                },
+                Event::Speak { message } => RequestMessage::Function {
+                    name: ChatFunctionArgs::get_name(),
+                    function_call: FunctionCall {
+                        name: ChatFunctionArgs::get_name(),
+                        arguments: serde_json::to_string(&ChatFunctionArgs {
+                            message: message.clone(),
+                        })
+                        .unwrap(),
+                    },
+                    content: serde_json::Value::Null
+                },
+                Event::ListenOtherSpeak {
+                    player_name,
+                    message,
+                } => RequestMessage::System {
+                    content: format!("{}: {}", player_name, message),
+                },
+                
             })
             .collect::<Vec<_>>(),
     );

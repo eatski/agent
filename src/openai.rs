@@ -12,9 +12,11 @@ pub enum RequestMessage{
     User {
         content: String,
     },
-    #[serde(rename = "function")]
+    #[serde(rename = "assistant")]
     Function {
+        name: String,
         function_call: FunctionCall,
+        content: serde_json::Value
     },
 }
 
@@ -88,6 +90,7 @@ async fn send_request(body: ChatCompletionBody) -> Result<Response, OpenAIClient
         })?;
     if !response.status().is_success() {
         println!("Error: {:?}", response);
+        println!("Error: {:?}", response.text().await);
         return Err(OpenAIClientError);
     }
     let response = response.json::<Response>().await.map_err(|e| {

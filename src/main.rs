@@ -79,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .events
                         .push(Event::Reaction { 
                             thinking: reaction.thinking.clone(),
+                            positivity: reaction.positivity,
                         });
                     println!("{}:({})", agent.name, reaction.thinking)
                 }
