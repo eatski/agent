@@ -1,0 +1,21 @@
+{
+    "common": "common.md",
+    "agents": [
+        {
+            "name": "ルフィ",
+            "prompt": "agent-a.md"
+        },
+        {
+            "name": "ナルト",
+            "prompt": "agent-b.md"
+        },
+        {
+            "name": "ゴン",
+            "prompt": "agent-c.md"
+        },
+        {
+            "name": "ジョジョ",
+            "prompt": "agent-d.md"
+        }
+    ]
+}

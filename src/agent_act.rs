@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-fn positivity_examples() -> Vec<String> {
+fn aggressiveness_examples() -> Vec<String> {
     vec![
         "1".to_string(),
         "2".to_string(),
@@ -43,10 +43,10 @@ impl FunctionArgs for ReactionFunctionArgs {
 #[derive(JsonSchema, Deserialize, Debug, Clone, Serialize)]
 pub struct ReactionFunctionArgs {
     #[schemars(
-        description = "Aggressiveness of whether to speak up or not (the higher the higher, the more aggressive). Maximize if you receive a question or reference to yourself, minimize if you want to wait for someone else to speak.",
-        example = "positivity_examples"
+        description = "Aggressiveness of whether to speak up or not (the higher the higher, the more aggressive). Maximize If you are being asked a question, being addressed directly, or have the responsibility to speak. Minimize if you want to wait for someone else to speak.",
+        example = "aggressiveness_examples"
     )]
-    pub positivity: usize,
+    pub aggressiveness: usize,
     #[schemars(
         description = "What you think in 日本語. Your perceived situation and how the conversation will unfold."
     )]
@@ -70,27 +70,31 @@ impl FunctionArgs for ChatFunctionArgs {
 
 pub async fn agent_act<F: FunctionArgs + JsonSchema + DeserializeOwned>(
     agent: &Agent,
-    system_promot: &str,
+    common_prompts: &Vec<String>,
 ) -> Result<std::option::Option<F>, OpenAIClientError> {
-    let mut messages = vec![
-        RequestMessage::System{
-            content: system_promot.to_string(),
-        },
-        RequestMessage::System {
-            content: agent.prompt.clone(),
-        }
-    ];
+    let mut messages = common_prompts
+        .iter()
+        .map(|prompt| RequestMessage::System {
+            content: prompt.to_string(),
+        })
+        .collect::<Vec<_>>();
+    messages.push(RequestMessage::System {
+        content: format!("あなたの名前は「{}」です。", agent.name)
+    });
+    messages.push(RequestMessage::System {
+        content: agent.prompt.clone(),
+    });
     messages.append(
         &mut agent
             .events
             .iter()
             .map(|event| match event {
-                Event::Reaction { thinking, positivity} => RequestMessage::Function {
+                Event::Reaction { thinking, aggressiveness} => RequestMessage::Function {
                     name: ReactionFunctionArgs::get_name(),
                     function_call: FunctionCall {
                         name: ReactionFunctionArgs::get_name(),
                         arguments: serde_json::to_string(&ReactionFunctionArgs {
-                            positivity: positivity.clone(),
+                            aggressiveness: aggressiveness.clone(),
                             thinking: thinking.clone(),
                         })
                         .unwrap(),

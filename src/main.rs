@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf, fs::read_to_string};
 
-use dialoguer::Confirm;
+use dialoguer::{Confirm, Input};
 use model::Agent;
 use rand::seq::SliceRandom;
 use tokio::task;
@@ -11,26 +11,42 @@ use crate::{agent_act::{ReactionFunctionArgs, ChatFunctionArgs}, model::Event};
 mod model;
 mod openai;
 mod agent_act;
+#[derive(serde::Deserialize)]
+struct ManifestJson {
+    common: String,
+    agents: Vec<ManifestJsonAgent>,
+}
 
-const MANIFESTS: [(&str, &str); 4] = [
-    ("山田", "./prompts/agent-a.md"),
-    ("田中", "./prompts/agent-b.md"),
-    ("鈴木", "./prompts/agent-c.md"),
-    ("佐藤", "./prompts/agent-d.md"),
-];
+#[derive(serde::Deserialize)]
+struct ManifestJsonAgent {
+    name: String,
+    prompt: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut agents = MANIFESTS
-        .iter()
-        .map(|(name, prompt)| {
-            Agent::new(name.to_string(), std::fs::read_to_string(prompt).unwrap())
-        })
-        .collect::<Vec<_>>();
+    
+    let manifest_path: String =  Input::new()
+        .with_prompt("manifest.jsonのあるディレクトリを指定してください。")
+        .interact()?;
+    let dir_path = PathBuf::from(manifest_path);
+    let manifest = read_to_string(dir_path.join("manifest.json"))?;
+    let manifest: ManifestJson = serde_json::from_str(&manifest)?;
 
     let mut latest_speaker: Option<String> = None;
-    let system_prompt = std::fs::read_to_string("./prompts/system.md")?;
+    let common_prompt = read_to_string(dir_path.join(manifest.common))?;
+   
+    let mut agents = manifest
+    .agents
+    .iter()
+    .map(|agent| {
+        Agent::new(agent.name.clone(),  read_to_string(dir_path.join(agent.prompt.as_str())).unwrap())
+    })
+    .collect::<Vec<_>>();
 
+    let participants = agents.iter().map(|agent| agent.name.clone()).collect::<Vec<_>>().join(",");
+    let participants_promot = format!("参加者は {} の{}人です。", participants, manifest.agents.len());
+    let common_prompts = vec![common_prompt, participants_promot];
     'main: loop {
         if Confirm::new()
             .with_prompt("プログラムを続けますか?")
@@ -54,11 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 })
                 .map(|agent| {
-                    let system_prompt = system_prompt.clone();
+                    let common_prompts = common_prompts.clone();
                     task::spawn(async move {
                         (
                             agent.name.clone(),
-                            agent_act::<ReactionFunctionArgs>(&agent, system_prompt.as_str()).await,
+                            agent_act::<ReactionFunctionArgs>(&agent, &common_prompts).await,
                         )
                     })
                 })
@@ -79,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .events
                         .push(Event::Reaction { 
                             thinking: reaction.thinking.clone(),
-                            positivity: reaction.positivity,
+                            aggressiveness: reaction.aggressiveness,
                         });
                     println!("{}:({})", agent.name, reaction.thinking)
                 }
@@ -87,14 +103,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             async {
                 let most_possible = thinkings
                     .iter()
-                    .max_by_key(|(_, args)| args.positivity)
+                    .max_by_key(|(_, args)| args.aggressiveness)
                     .map(|e| e.0.clone())?;
                 let result = agent_act::<ChatFunctionArgs>(
                     &agents
                         .iter()
                         .find(|agent| agent.name == most_possible)?
                         .clone(),
-                    &system_prompt,
+                    &common_prompts,
                 )
                 .await
                 .ok()??;

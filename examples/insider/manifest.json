@@ -1,0 +1,21 @@
+{
+    "common": "common.md",
+    "agents": [
+        {
+            "name": "山田",
+            "prompt": "agent-a.md"
+        },
+        {
+            "name": "桜井",
+            "prompt": "agent-b.md"
+        },
+        {
+            "name": "後藤",
+            "prompt": "agent-c.md"
+        },
+        {
+            "name": "草野",
+            "prompt": "agent-d.md"
+        }
+    ]
+}

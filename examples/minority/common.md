@@ -9,7 +9,6 @@ If the minority player finds out that he or she is the minority player, the mino
 The minority can also win by guessing the "word" of the majority.
 
 ## Participants
-There are four participants: 山田、田中、鈴木、佐藤.
 Three of them share the same "word" and are in the majority. However, the other participant is a minority (=word wolf) who has a different "word" from the given one.
 
 ## Your actions

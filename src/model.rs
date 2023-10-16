@@ -10,7 +10,7 @@ pub struct Agent {
 pub enum Event {
     Reaction {
         thinking: String,
-        positivity: usize,
+        aggressiveness: usize,
     },
     Speak{
         message: String,   
