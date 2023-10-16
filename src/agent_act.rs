@@ -126,7 +126,7 @@ pub async fn agent_act<F: FunctionArgs + JsonSchema + DeserializeOwned>(
         model: "gpt-4-0613".to_string(),
         messages,
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: 500,
         function_call: FunctionCallName {
             name: F::get_name()
         },
